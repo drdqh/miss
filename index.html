@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Blessing</title>
+    <title>爱心环绕祝福 - Miss U</title>
     <style>
         * {
             margin: 0;
@@ -11,8 +11,18 @@
             overflow: hidden;
         }
         body {
-            background-color: #f8f9fa;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
             height: 100vh;
+            position: relative;
+            font-family: "Segoe UI", Arial, sans-serif;
+        }
+        /* 隐藏的画布，用于计算文字像素位置 */
+        #text-canvas {
+            position: absolute;
+            left: -9999px;
+            top: -9999px;
+            font-family: "Arial", sans-serif;
+            font-weight: bold;
         }
         .float-box {
             position: absolute;
@@ -20,21 +30,64 @@
             border-radius: 8px;
             box-shadow: 0 3px 10px rgba(0,0,0,0.2);
             pointer-events: none;
-            opacity: 0; /* 初始透明 */
-            will-change: opacity, transform;
-            transition: opacity 1s ease; /* 渐入渐出过渡 */
+            opacity: 0;
+            transition: opacity 0.6s ease, transform 0.4s ease;
+            z-index: 5;
         }
         .float-text {
             color: #fff;
             font-size: 16px;
-            font-family: "Microsoft YaHei", sans-serif;
+            font-family: "Segoe UI", sans-serif;
             font-weight: 500;
+        }
+        .light-point {
+            position: absolute;
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            pointer-events: none;
+            opacity: 0;
+            box-shadow: 0 0 8px 2px currentColor;
+            transition: opacity 0.5s ease, transform 0.3s ease;
+            z-index: 10;
+        }
+        .char-position {
+            position: absolute; /* 仅用于定位文字的显示位置 */
+            font-size: 120px;
+            font-weight: bold;
+            font-family: "Arial", sans-serif;
+            opacity: 0; /* 隐藏实际文字，仅用光点显示 */
+        }
+        .blessing-message {
+            position: absolute;
+            padding: 8px 15px;
+            border-radius: 8px;
+            box-shadow: 0 3px 10px rgba(0,0,0,0.2);
+            pointer-events: none;
+            opacity: 0;
+            color: #fff;
+            font-size: 16px;
+            font-family: "Segoe UI", sans-serif;
+            font-weight: 500;
+            z-index: 5;
+            transition: opacity 1.5s ease, transform 1.5s ease;
+            max-width: 200px;
+            text-align: center;
+            white-space: nowrap;
         }
     </style>
 </head>
 <body>
+    <!-- 用于计算文字像素的画布 -->
+    <canvas id="text-canvas"></canvas>
+    <!-- 文字定位容器 -->
+    <div class="char-position" data-char="m"></div>
+    <div class="char-position" data-char="i"></div>
+    <div class="char-position" data-char="s"></div>
+    <div class="char-position" data-char="s"></div>
+    <div class="char-position" data-char="u"></div>
+
     <script>
-        // 女生专属祝福语列表
         const blessingList = [
             "愿你每天都闪闪发光",
             "你值得世间所有的温柔与美好✨",
@@ -43,7 +96,7 @@
             "你的存在本身，就是一件很美好的事",
             "愿你拥有发现美的眼睛，和感知幸福的心",
             "平安喜乐，不止今天",
-            "天冷了多穿衣",
+            "天冷了记得多穿衣",
             "记得好好吃饭",
             "永远开心永远明媚",
             "就算步子很小，也要一步步前进",
@@ -58,109 +111,312 @@
             "素履以往，自在清欢",
         ];
 
-        // 文字框颜色列表（温柔明亮系）
         const boxColors = [
             '#FF6B8B', '#FF9E7D', '#FFD166', '#66D2A0', 
             '#64B5F6', '#9388DB', '#EC4899', '#60A5FA'
         ];
 
-        // 配置参数
-        const minSize = 14;         // 最小字体大小
-        const maxSize = 18;         // 最大字体大小
-        const spawnInterval = 200;  // 生成间隔(ms) - 加快初期填充速度
-        const maxRotation = 8;      // 最大旋转角度(deg)
-        const fullScreenCount = 30; // 满屏阈值（达到此数量后开始消失）
-        const fadeTime = 1500;      // 渐入渐出时长(ms)
+        // 配置参数 - 最终优化
+        const showDuration = 2000;  // 文字框显示2秒
+        const fadeTime = 400;
+        const gatherDuration = 1500; // 光点移动1.5秒
+        const maxPoints = 800;      // 更多光点保证填充
+        const maxBoxCount = 60;
+        let currentBoxCount = 0;
+        let currentPoints = 0;
+        let isStopping = false;
+        let isGathered = false;
+        let spawnTimer;
+        // 存储每个文字的有效像素位置（关键优化）
+        const charPoints = { "m": [], "i": [], "s": [], "u": [] };
 
-        // 跟踪当前文字框数量
-        let currentCount = 0;
+        // 初始化：计算每个文字的像素位置（核心逻辑）
+        function initCharPoints() {
+            const canvas = document.getElementById('text-canvas');
+            const ctx = canvas.getContext('2d');
+            const chars = document.querySelectorAll('.char-position');
+            const fontSize = 120; // 与显示大小一致
+            
+            // 设置画布和字体（增加画布尺寸确保文字完整显示）
+            canvas.width = fontSize * 2;
+            canvas.height = fontSize * 2;
+            ctx.font = `bold ${fontSize}px "Arial", sans-serif`;
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            
+            // 计算每个文字的像素位置
+            chars.forEach(char => {
+                const text = char.dataset.char;
+                // 清空画布
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                // 绘制文字到画布（黑色）
+                ctx.fillStyle = '#000';
+                ctx.fillText(text, canvas.width/2, canvas.height/2);
+                
+                // 读取画布像素数据
+                const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
+                // 每隔较小间隔取一个像素点（提高精度）
+                for (let y = 0; y < canvas.height; y += 3) {
+                    for (let x = 0; x < canvas.width; x += 3) {
+                        // 计算像素在数据中的索引（RGBA格式，每4个值一个像素）
+                        const index = (y * canvas.width + x) * 4;
+                        const alpha = imageData[index + 3]; // 透明度（0-255）
+                        // 只保留有文字的像素（alpha > 0 表示该位置有文字）
+                        if (alpha > 100) {
+                            // 记录相对于画布中心的位置
+                            charPoints[text].push({ 
+                                x: x - canvas.width/2, 
+                                y: y - canvas.height/2 
+                            });
+                        }
+                    }
+                }
+            });
+
+            // 定位显示文字的容器
+            setupCharPositions();
+        }
+
+        // 定位文字容器在屏幕中央
+        function setupCharPositions() {
+            const chars = document.querySelectorAll('.char-position');
+            const centerX = window.innerWidth / 2;
+            const centerY = window.innerHeight / 2;
+            // 调整字母间距，按照要求设置
+            const charSpacing = [110, 40, 70, 70, 120];
+            let currentX = centerX;
+            
+            chars.forEach((char, index) => {
+                char.innerText = char.dataset.char;
+                // 根据字母设置不同的间距
+                if (index > 0) {
+                    currentX += charSpacing[index-1];
+                } else {
+                    currentX -= charSpacing.reduce((a, b) => a + b, 0) / 2;
+                }
+                
+                char.style.left = `${currentX}px`;
+                char.style.top = `${centerY}px`;
+                char.style.transform = 'translateY(-50%)';
+            });
+        }
 
         // 创建文字框
         function createFloatBox() {
-            // 创建文字框容器
+            if (isStopping || currentBoxCount >= maxBoxCount) return;
+
             const box = document.createElement('div');
             box.className = 'float-box';
             
-            // 创建文字元素
             const text = document.createElement('div');
             text.className = 'float-text';
             text.innerText = blessingList[Math.floor(Math.random() * blessingList.length)];
             box.appendChild(text);
             
-            // 随机样式
-            box.style.backgroundColor = boxColors[Math.floor(Math.random() * boxColors.length)];
-            const fontSize = Math.random() * (maxSize - minSize) + minSize;
+            const color = boxColors[Math.floor(Math.random() * boxColors.length)];
+            box.style.backgroundColor = color;
+            const fontSize = 14 + Math.random() * 4;
             text.style.fontSize = `${fontSize}px`;
             
-            // 随机旋转角度
-            const rotation = (Math.random() - 0.5) * 2 * maxRotation;
+            const rotation = (Math.random() - 0.5) * 16;
             box.style.transform = `rotate(${rotation}deg)`;
             
-            // 随机位置（确保完全显示在屏幕内）
-            const boxWidth = 200;  // 预留文字框宽度
-            const boxHeight = 80;  // 预留文字框高度
-            const maxLeft = window.innerWidth - boxWidth;
-            const maxTop = window.innerHeight - boxHeight;
+            const maxLeft = window.innerWidth - 200;
+            const maxTop = window.innerHeight - 80;
             box.style.left = `${Math.random() * maxLeft}px`;
             box.style.top = `${Math.random() * maxTop}px`;
             
             document.body.appendChild(box);
-            currentCount++;
+            currentBoxCount++;
             
-            // 触发渐入效果
+            setTimeout(() => box.style.opacity = 1, 30); // 加快显示
+            
+            // 显示后转为光点
             setTimeout(() => {
-                box.style.opacity = 1;
-            }, 50);
-            
-            // 满屏后才开始设置消失计时器
-            if (currentCount >= fullScreenCount) {
-                // 随机延迟后消失（避免同时消失）
-                const randomDelay = Math.random() * 3000; // 0-3秒随机延迟
+                if (!box.parentNode) return;
+                box.style.opacity = 0;
+                box.style.transform = `rotate(${rotation}deg) scale(0.7)`;
+                
                 setTimeout(() => {
-                    box.style.opacity = 0;
-                    // 淡出后移除元素
-                    setTimeout(() => {
-                        if (box.parentNode) {
-                            document.body.removeChild(box);
-                            currentCount--;
-                        }
-                    }, fadeTime);
-                }, 1000 + randomDelay); // 基础显示1秒后再开始随机消失
-            }
+                    if (box.parentNode) {
+                        document.body.removeChild(box);
+                        currentBoxCount--;
+                        createLightPoint(
+                            parseFloat(box.style.left) + box.offsetWidth/2,
+                            parseFloat(box.style.top) + box.offsetHeight/2,
+                            color
+                        );
+                    }
+                }, fadeTime);
+            }, showDuration);
         }
-        
-        // 定时生成新的文字框
-        const spawnTimer = setInterval(() => {
-            // 超过满屏阈值后降低生成频率
-            if (currentCount > fullScreenCount * 1.2) {
-                return; // 暂时停止生成，等待消失
-            }
-            createFloatBox();
-        }, spawnInterval);
-        
-        // 初始化生成一批（快速填充）
-        for (let i = 0; i < 10; i++) {
+
+        // 创建光点
+        function createLightPoint(x, y, color) {
+            if (currentPoints >= maxPoints || isGathered) return;
+            
+            const point = document.createElement('div');
+            point.className = 'light-point';
+            point.style.left = `${x}px`;
+            point.style.top = `${y}px`;
+            point.style.backgroundColor = color;
+            point.style.color = color;
+            document.body.appendChild(point);
+            currentPoints++;
+            
+            setTimeout(() => point.style.opacity = 1, 30); // 加快显示速度
+            
+            // 延迟后移动到文字的实际笔画位置 - 进一步加快移动速度
+            setTimeout(() => moveToCharStroke(point), 50 + Math.random() * 300);
+        }
+
+        // 光点移动到文字的笔画像素位置（精准定位）
+        function moveToCharStroke(point) {
+            if (!point.parentNode || isGathered) return;
+            
+            // 随机选一个字
+            const chars = Object.keys(charPoints);
+            const char = chars[Math.floor(Math.random() * chars.length)];
+            // 从该字的有效像素中随机选一个位置
+            const points = charPoints[char];
+            if (points.length === 0) return;
+            const randomPoint = points[Math.floor(Math.random() * points.length)];
+            
+            // 找到该字的显示位置
+            const charElements = document.querySelectorAll(`.char-position[data-char="${char}"]`);
+            // 如果有多个相同字符（如两个s），随机选择一个
+            const charElement = charElements[Math.floor(Math.random() * charElements.length)];
+            const charRect = charElement.getBoundingClientRect();
+            
+            // 计算光点最终位置（文字容器中心 + 像素相对位置）
+            const targetX = charRect.left + charRect.width/2 + randomPoint.x;
+            const targetY = charRect.top + charRect.height/2 + randomPoint.y;
+            
+            // 移动动画 - 按照要求设为1.5秒
+            point.style.transition = `left ${gatherDuration}ms cubic-bezier(0.3, 0.7, 0.3, 1), top ${gatherDuration}ms cubic-bezier(0.3, 0.7, 0.3, 1)`;
+            point.style.left = `${targetX}px`;
+            point.style.top = `${targetY}px`;
+            
+            // 到达后保持显示
             setTimeout(() => {
-                createFloatBox();
-            }, i * 100); // 错开生成时间
+                if (point.parentNode) {
+                    point.style.opacity = 0.9;
+                    checkGatherComplete();
+                }
+            }, gatherDuration);
         }
-        
-        // 窗口 resize 时重新布局
-        window.addEventListener('resize', () => {
-            const boxes = document.querySelectorAll('.float-box');
-            currentCount = boxes.length;
-            boxes.forEach(box => {
-                const boxWidth = 200;
-                const boxHeight = 80;
-                const maxLeft = window.innerWidth - boxWidth;
-                const maxTop = window.innerHeight - boxHeight;
-                box.style.left = `${Math.random() * maxLeft}px`;
-                box.style.top = `${Math.random() * maxTop}px`;
+
+        // 检查汇聚完成
+        function checkGatherComplete() {
+            if (currentPoints >= maxPoints * 0.9 && !isStopping) {
+                isStopping = true;
+                setTimeout(() => {
+                    isGathered = true;
+                    // 清除多余光点
+                    setTimeout(clearExcessPoints, 400); // 加快清除速度
+                }, 800); // 缩短等待时间
+            }
+        }
+
+        // 清除多余光点
+        function clearExcessPoints() {
+            const points = document.querySelectorAll('.light-point');
+            const keepCount = 500; // 保留的光点数量
+            
+            points.forEach((point, index) => {
+                if (index >= keepCount) {
+                    // 随机延迟和方向
+                    const delay = Math.random() * 400; // 进一步缩短延迟
+                    const angle = Math.random() * Math.PI * 2;
+                    const distance = 100 + Math.random() * 200;
+                    
+                    setTimeout(() => {
+                        point.style.transition = `opacity 0.5s ease ${delay}ms, transform 0.8s ease ${delay}ms`; // 进一步加快动画
+                        point.style.opacity = '0';
+                        point.style.transform = `translate(${Math.cos(angle) * distance}px, ${Math.sin(angle) * distance}px) scale(0.1)`;
+                        
+                        // 移除DOM元素
+                        setTimeout(() => {
+                            if (point.parentNode) {
+                                document.body.removeChild(point);
+                                currentPoints--;
+                            }
+                        }, 800); // 进一步缩短移除时间
+                    }, delay);
+                }
             });
-        });
+            
+            // 在光点清除完成后显示所有祝福消息
+            setTimeout(showAllBlessings, 1500);
+        }
+
+        // 计算爱心形状的坐标点
+        function calculateHeartPoints(count, centerX, centerY, radius) {
+            const points = [];
+            for (let i = 0; i < count; i++) {
+                // 参数方程计算爱心形状
+                const t = (i / count) * 2 * Math.PI;
+                const x = 16 * Math.pow(Math.sin(t), 3);
+                const y = 13 * Math.cos(t) - 5 * Math.cos(2*t) - 2 * Math.cos(3*t) - Math.cos(4*t);
+                
+                // 缩放并平移到中心位置
+                const scale = radius / 16;
+                points.push({
+                    x: centerX + x * scale,
+                    y: centerY - y * scale
+                });
+            }
+            return points;
+        }
+
+        // 显示所有祝福消息，排列成爱心形状
+        function showAllBlessings() {
+            const centerX = window.innerWidth / 2;
+            const centerY = window.innerHeight / 2;
+            const heartRadius = Math.min(window.innerWidth, window.innerHeight) * 0.4;
+            
+            // 计算爱心形状的坐标点
+            const heartPoints = calculateHeartPoints(blessingList.length, centerX, centerY, heartRadius);
+            
+            blessingList.forEach((blessing, index) => {
+                setTimeout(() => {
+                    const message = document.createElement('div');
+                    message.className = 'blessing-message';
+                    message.innerText = blessing;
+                    
+                    // 随机选择一个颜色
+                    const color = boxColors[Math.floor(Math.random() * boxColors.length)];
+                    message.style.backgroundColor = color;
+                    
+                    // 设置爱心形状上的位置
+                    const point = heartPoints[index];
+                    message.style.left = `${point.x}px`;
+                    message.style.top = `${point.y}px`;
+                    
+                    // 随机旋转
+                    const rotation = (Math.random() - 0.5) * 16;
+                    message.style.transform = `rotate(${rotation}deg) translate(-50%, -50%)`;
+                    
+                    document.body.appendChild(message);
+                    
+                    // 显示消息
+                    setTimeout(() => {
+                        message.style.opacity = 1;
+                    }, 100);
+                    
+                }, index * 300); // 每条消息间隔300毫秒显示
+            });
+        }
+
+        // 初始化
+        initCharPoints(); // 先计算文字像素位置
+        spawnTimer = setInterval(createFloatBox, 80); // 进一步加快生成频率
+        for (let i = 0; i < 25; i++) {
+            setTimeout(createFloatBox, i * 60); // 进一步加快初始生成
+        }
+
+        // 窗口变化时重新定位
+        window.addEventListener('resize', setupCharPositions);
     </script>
 </body>
 </html>
-
-
-
