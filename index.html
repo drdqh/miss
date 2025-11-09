@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title></title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+        }
+        body {
+            background-color: #f8f9fa;
+            height: 100vh;
+        }
+        .float-box {
+            position: absolute;
+            padding: 8px 15px;
+            border-radius: 8px;
+            box-shadow: 0 3px 10px rgba(0,0,0,0.2);
+            pointer-events: none;
+            will-change: transform, top, left;
+            transition: all 0.3s ease;
+        }
+        .float-text {
+            color: #fff;
+            font-size: 16px;
+            font-family: "Microsoft YaHei", sans-serif;
+            font-weight: 500;
+        }
+    </style>
+</head>
+<body>
+    <script>
+        // 女生专属祝福语列表
+        const blessingList = [
+            "愿你每天都闪闪发光，笑容比阳光还甜～",
+            "你值得世间所有的温柔与美好✨",
+            "做自己的女王，不卑不亢，光芒万丈",
+            "愿你眼里总有光，活成自己喜欢的模样",
+            "每天都要开开心心，烦恼都被风吹走呀",
+            "你的努力和善良，都会变成惊喜回馈你",
+            "愿你如星辰般璀璨，永远明朗坦荡",
+            "今天的你也超可爱，要继续保持呀～",
+            "无论何时，都要记得好好爱自己呀",
+            "愿你被世界温柔以待，每一天都充满小确幸",
+            "你的存在本身，就是一件很美好的事",
+            "勇敢做自己，你真的超棒的！",
+            "愿你拥有发现美的眼睛，和感知幸福的心",
+            "生活有点苦，但你超甜呀🍬",
+            "愿你所到之处，遍地阳光；所行之路，皆遇坦途"
+        ];
+
+        // 文字框颜色列表（温柔明亮系）
+        const boxColors = [
+            '#FF6B8B', '#FF9E7D', '#FFD166', '#66D2A0', 
+            '#64B5F6', '#9388DB', '#EC4899', '#60A5FA'
+        ];
+
+        // 配置参数
+        const minSpeed = 0.8;    // 最小下落速度
+        const maxSpeed = 2;      // 最大下落速度
+        const minSize = 14;      // 最小字体大小
+        const maxSize = 18;      // 最大字体大小
+        const spawnInterval = 300; // 生成间隔(ms)
+        const maxRotation = 10;  // 最大旋转角度(deg)
+
+        // 创建飘动画框
+        function createFloatBox() {
+            // 创建文字框容器
+            const box = document.createElement('div');
+            box.className = 'float-box';
+            
+            // 创建文字元素
+            const text = document.createElement('div');
+            text.className = 'float-text';
+            text.innerText = blessingList[Math.floor(Math.random() * blessingList.length)];
+            box.appendChild(text);
+            
+            // 随机样式
+            box.style.backgroundColor = boxColors[Math.floor(Math.random() * boxColors.length)];
+            const fontSize = Math.random() * (maxSize - minSize) + minSize;
+            text.style.fontSize = `${fontSize}px`;
+            
+            // 随机旋转角度（增加灵动性）
+            const rotation = (Math.random() - 0.5) * 2 * maxRotation;
+            box.style.transform = `rotate(${rotation}deg)`;
+            
+            // 随机初始位置
+            box.style.left = `${Math.random() * window.innerWidth}px`;
+            box.style.top = `-${box.offsetHeight + 20}px`; // 从顶部外开始
+            
+            document.body.appendChild(box);
+            
+            // 动画参数
+            const speed = Math.random() * (maxSpeed - minSpeed) + minSpeed;
+            const drift = (Math.random() - 0.5) * 1.5; // 左右漂移系数
+            
+            // 动画函数
+            function animate() {
+                if (!box.parentNode) return;
+                
+                const currentTop = parseFloat(box.style.top) || 0;
+                const currentLeft = parseFloat(box.style.left) || 0;
+                
+                // 更新位置
+                box.style.top = `${currentTop + speed}px`;
+                box.style.left = `${currentLeft + drift}px`;
+                
+                // 超出屏幕时移除
+                if (currentTop > window.innerHeight + 50) {
+                    document.body.removeChild(box);
+                    return;
+                }
+                
+                requestAnimationFrame(animate);
+            }
+            
+            animate();
+        }
+        
+        // 定时生成新的文字框
+        setInterval(createFloatBox, spawnInterval);
+        
+        // 初始化生成一批
+        for (let i = 0; i < 15; i++) {
+            createFloatBox();
+        }
+        
+        // 窗口 resize 时重新生成
+        window.addEventListener('resize', () => {
+            document.querySelectorAll('.float-box').forEach(box => box.remove());
+            for (let i = 0; i < 15; i++) {
+                createFloatBox();
+            }
+        });
+    </script>
+</body>
+</html>
