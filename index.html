@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title></title>
+    <title>满屏祝福文字</title>
     <style>
         * {
             margin: 0;
@@ -20,8 +20,9 @@
             border-radius: 8px;
             box-shadow: 0 3px 10px rgba(0,0,0,0.2);
             pointer-events: none;
-            will-change: transform, top, left;
-            transition: all 0.3s ease;
+            opacity: 0; /* 初始透明 */
+            will-change: opacity, transform;
+            transition: opacity 1s ease; /* 渐入渐出过渡 */
         }
         .float-text {
             color: #fff;
@@ -59,14 +60,17 @@
         ];
 
         // 配置参数
-        const minSpeed = 0.8;    // 最小下落速度
-        const maxSpeed = 2;      // 最大下落速度
-        const minSize = 14;      // 最小字体大小
-        const maxSize = 18;      // 最大字体大小
-        const spawnInterval = 300; // 生成间隔(ms)
-        const maxRotation = 10;  // 最大旋转角度(deg)
+        const minSize = 14;         // 最小字体大小
+        const maxSize = 18;         // 最大字体大小
+        const spawnInterval = 200;  // 生成间隔(ms) - 加快初期填充速度
+        const maxRotation = 8;      // 最大旋转角度(deg)
+        const fullScreenCount = 30; // 满屏阈值（达到此数量后开始消失）
+        const fadeTime = 1500;      // 渐入渐出时长(ms)
 
-        // 创建飘动画框
+        // 跟踪当前文字框数量
+        let currentCount = 0;
+
+        // 创建文字框
         function createFloatBox() {
             // 创建文字框容器
             const box = document.createElement('div');
@@ -83,57 +87,71 @@
             const fontSize = Math.random() * (maxSize - minSize) + minSize;
             text.style.fontSize = `${fontSize}px`;
             
-            // 随机旋转角度（增加灵动性）
+            // 随机旋转角度
             const rotation = (Math.random() - 0.5) * 2 * maxRotation;
             box.style.transform = `rotate(${rotation}deg)`;
             
-            // 随机初始位置
-            box.style.left = `${Math.random() * window.innerWidth}px`;
-            box.style.top = `-${box.offsetHeight + 20}px`; // 从顶部外开始
+            // 随机位置（确保完全显示在屏幕内）
+            const boxWidth = 200;  // 预留文字框宽度
+            const boxHeight = 80;  // 预留文字框高度
+            const maxLeft = window.innerWidth - boxWidth;
+            const maxTop = window.innerHeight - boxHeight;
+            box.style.left = `${Math.random() * maxLeft}px`;
+            box.style.top = `${Math.random() * maxTop}px`;
             
             document.body.appendChild(box);
+            currentCount++;
             
-            // 动画参数
-            const speed = Math.random() * (maxSpeed - minSpeed) + minSpeed;
-            const drift = (Math.random() - 0.5) * 1.5; // 左右漂移系数
+            // 触发渐入效果
+            setTimeout(() => {
+                box.style.opacity = 1;
+            }, 50);
             
-            // 动画函数
-            function animate() {
-                if (!box.parentNode) return;
-                
-                const currentTop = parseFloat(box.style.top) || 0;
-                const currentLeft = parseFloat(box.style.left) || 0;
-                
-                // 更新位置
-                box.style.top = `${currentTop + speed}px`;
-                box.style.left = `${currentLeft + drift}px`;
-                
-                // 超出屏幕时移除
-                if (currentTop > window.innerHeight + 50) {
-                    document.body.removeChild(box);
-                    return;
-                }
-                
-                requestAnimationFrame(animate);
+            // 满屏后才开始设置消失计时器
+            if (currentCount >= fullScreenCount) {
+                // 随机延迟后消失（避免同时消失）
+                const randomDelay = Math.random() * 3000; // 0-3秒随机延迟
+                setTimeout(() => {
+                    box.style.opacity = 0;
+                    // 淡出后移除元素
+                    setTimeout(() => {
+                        if (box.parentNode) {
+                            document.body.removeChild(box);
+                            currentCount--;
+                        }
+                    }, fadeTime);
+                }, 1000 + randomDelay); // 基础显示1秒后再开始随机消失
             }
-            
-            animate();
         }
         
         // 定时生成新的文字框
-        setInterval(createFloatBox, spawnInterval);
-        
-        // 初始化生成一批
-        for (let i = 0; i < 15; i++) {
+        const spawnTimer = setInterval(() => {
+            // 超过满屏阈值后降低生成频率
+            if (currentCount > fullScreenCount * 1.2) {
+                return; // 暂时停止生成，等待消失
+            }
             createFloatBox();
+        }, spawnInterval);
+        
+        // 初始化生成一批（快速填充）
+        for (let i = 0; i < 10; i++) {
+            setTimeout(() => {
+                createFloatBox();
+            }, i * 100); // 错开生成时间
         }
         
-        // 窗口 resize 时重新生成
+        // 窗口 resize 时重新布局
         window.addEventListener('resize', () => {
-            document.querySelectorAll('.float-box').forEach(box => box.remove());
-            for (let i = 0; i < 15; i++) {
-                createFloatBox();
-            }
+            const boxes = document.querySelectorAll('.float-box');
+            currentCount = boxes.length;
+            boxes.forEach(box => {
+                const boxWidth = 200;
+                const boxHeight = 80;
+                const maxLeft = window.innerWidth - boxWidth;
+                const maxTop = window.innerHeight - boxHeight;
+                box.style.left = `${Math.random() * maxLeft}px`;
+                box.style.top = `${Math.random() * maxTop}px`;
+            });
         });
     </script>
 </body>
